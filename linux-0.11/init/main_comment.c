@@ -103,25 +103,35 @@ static inline _syscall0(int,pause)
 static inline _syscall1(int,setup,void *,BIOS)
 static inline _syscall0(int,sync)   // int sync ()系统调用。
 
-#include <linux/tty.h>   // tty 头文件，定义了有关tty_io，串行通信方面的参数、常数。
-        // 所谓“串行通信“是指外设和计算机间使用一根数据信号线,
-        // 数据在一根数据信号线上按位进行传输，每一位数据都占据一个固定的时间长度。
-#include <linux/sched.h>  // 调度程序头文件，定义了任务结构task_struct、第1 个初始任务   
-        // 的数据。还有一些以宏的形式定义的有关描述符参数设置和获取的
-        // 嵌入式汇编函数程序。
-#include <linux/head.h>   // head 头文件，定义了段描述符的简单结构，和几个选择符常量。
-#include <asm/system.h>   // 系统头文件。以宏的形式定义了许多有关设置或修改
-        // 描述符/中断门等的嵌入式汇编子程序。
-#include <asm/io.h>    // io 头文件。以宏的嵌入汇编程序形式定义对io 端口操作的函数。
-#include <stddef.h>    // 标准定义头文件。定义了NULL, offsetof(TYPE, MEMBER)。
-#include <stdarg.h>    // 标准参数头文件。以宏的形式定义变量参数列表。主要说明了-个
-        // 类型(va_list)和三个宏(va_start, va_arg 和va_end)，vsprintf
-        // vprintf、vfprintf。
+#include <linux/tty.h>   
+// tty 头文件，定义了有关tty_io，串行通信方面的参数、常数。
+// 所谓“串行通信“是指外设和计算机间使用一根数据信号线,
+// 数据在一根数据信号线上按位进行传输，每一位数据都占据一个固定的时间长度。
+#include <linux/sched.h>  
+// 调度程序头文件，定义了任务结构task_struct、第1 个初始任务   
+// 的数据。还有一些以宏的形式定义的有关描述符参数设置和获取的
+// 嵌入式汇编函数程序。
+#include <linux/head.h>   
+// head 头文件，定义了段描述符的简单结构，和几个选择符常量。
+#include <asm/system.h>   
+// 系统头文件。以宏的形式定义了许多有关设置或修改
+// 描述符/中断门等的嵌入式汇编子程序。
+#include <asm/io.h>    
+// io 头文件。以宏的嵌入汇编程序形式定义对io 端口操作的函数。
+#include <stddef.h>    
+// 标准定义头文件。定义了NULL, offsetof(TYPE, MEMBER)。
+#include <stdarg.h>    
+// 标准参数头文件。以宏的形式定义变量参数列表。主要说明了-个
+// 类型(va_list)和三个宏(va_start, va_arg 和va_end)，vsprintf
+// vprintf、vfprintf。
 #include <unistd.h>    
-#include <fcntl.h>    // 文件控制头文件。用于文件及其描述符的操作控制常数符号的定义。
-#include <sys/types.h>   // 类型头文件。定义了基本的系统数据类型
+#include <fcntl.h>    
+// 文件控制头文件。用于文件及其描述符的操作控制常数符号的定义。
+#include <sys/types.h>   
+// 类型头文件。定义了基本的系统数据类型
 
-#include <linux/fs.h>   // 文件系统头文件。定义文件表结构（file,buffer_head,m_inode 等）
+#include <linux/fs.h>   
+// 文件系统头文件。定义文件表结构（file,buffer_head,m_inode 等）
 
 static char printbuf[1024];
 
@@ -142,9 +152,9 @@ extern long startup_time;       // 内核启动时间（开机时间）（秒）
 /* 
  * 以下这些数据是由setup.s 程序在引导时间设置的. 
  */  
-#define EXT_MEM_K (*(unsigned short *)0x90002)  // 1m以后的拓展内存大小。
-#define DRIVE_INFO (*(struct drive_info *)0x90080) // 硬盘参数表基址。
-#define ORIG_ROOT_DEV (*(unsigned short *)0x901FC) // 根文件系统所在设备号。
+#define EXT_MEM_K     (*(unsigned short *)    0x90002)  // 1m以后的拓展内存大小。
+#define DRIVE_INFO    (*(struct drive_info *) 0x90080)  // 硬盘参数表基址。
+#define ORIG_ROOT_DEV (*(unsigned short *)    0x901FC)  // 根文件系统所在设备号。
 
 /*
  * Yeah, yeah, it's ugly, but I cannot find how to do this correctly
@@ -186,44 +196,56 @@ static void time_init(void)    // 读取cmos中的信息，初始化全局变量
  startup_time = kernel_mktime(&time);
 }
 
-static long memory_end = 0;    // 机器具有的内存（字节数）
-static long buffer_memory_end = 0;  // 高速缓冲区末端地址
-static long main_memory_start = 0;  // 主内存（将用于分页）开始的位置
+static long memory_end          = 0;    // 机器具有的内存（字节数）
+static long buffer_memory_end   = 0;    // 高速缓冲区末端地址
+static long main_memory_start   = 0;    // 主内存（将用于分页）开始的位置
 
-struct drive_info { char dummy[32]; } drive_info; // 用于存放硬盘信息
+struct drive_info { char dummy[32]; } drive_info;   // 用于存放硬盘信息
 
 //---------------------------------------------------------------------------
 //      main
 //-------------------------------------------------------------------------
-void main(void)  /* This really IS void, no error here. */
-     // 此时中断仍然是关着，在必要的设置完成之后。
-     // 打开中断。
-{   /* The startup routine assumes (well, ...) this */
+void main(void)   /* This really IS void, no error here. */
+{                 /* The startup routine assumes (well, ...) this */
 /*
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
- // 下面这段代码用于保存
- // 根设备号 -- ROOT_DEV； 高速缓存末端地址 -- buffer_memory_end   
- // 机器内存数 -- memory_end；主内存开始地址 -- main_memory_start
-  ROOT_DEV = ORIG_ROOT_DEV;
+// 此时中断仍然是关着，在必要的设置完成之后，打开中断。
+  // 下面这段代码用于保存
+  // 根设备号 -- ROOT_DEV； 
+  // 高速缓存末端地址 -- buffer_memory_end   
+  // 机器内存数 -- memory_end；
+  // 主内存开始地址 -- main_memory_start
   
- drive_info = DRIVE_INFO;
+  // 根据 bootsect 中写入机器系统数据的信息设置根设备为软盘的信息，设置为根设备
+  ROOT_DEV = ORIG_ROOT_DEV;  
+  drive_info = DRIVE_INFO;              
  
- memory_end = (1<<20) + (EXT_MEM_K<<10);  // 内存大小=1Mb 字节+扩展内存(k)*1024 字节
- memory_end &= 0xfffff000;     // 忽略不到4Kb（1 页）的内存数
- if (memory_end > 16*1024*1024)    // 如果内存超过16Mb，则按16Mb 计
-  memory_end = 16*1024*1024;
- if (memory_end > 12*1024*1024)    // 如果内存>12Mb，则设置缓冲区末端=4Mb
-  buffer_memory_end = 4*1024*1024;
- else if (memory_end > 6*1024*1024)   // 否则如果内存>6Mb，则设置缓冲区末端=2Mb
-  buffer_memory_end = 2*1024*1024;
- else          // 否则则设置缓冲区末端=1Mb
-  buffer_memory_end = 1*1024*1024;
- main_memory_start = buffer_memory_end;  // 主内存(用于分页使用)起始位置=缓冲区末端
-#ifdef RAMDISK
- main_memory_start += rd_init(main_memory_start, RAMDISK*1024);
-#endif
+  memory_end = (1<<20) + (EXT_MEM_K<<10); // 内存大小=1Mb 字节+扩展内存(k)*1024 字节
+  memory_end &= 0xfffff000;               // 忽略不到4Kb（1 页）的内存数
+                                          // 按页的倍数取整，忽略内存末端不足一页的部分
+  
+  if (memory_end > 16*1024*1024)          // 如果内存超过16Mb，则按16Mb 计
+    memory_end = 16*1024*1024;
+  
+  if (memory_end > 12*1024*1024)          // 如果内存>12Mb，则设置缓冲区末端=4Mb
+    buffer_memory_end = 4*1024*1024;
+  else if (memory_end > 6*1024*1024)      // 否则如果内存>6Mb，则设置缓冲区末端=2Mb
+    buffer_memory_end = 2*1024*1024;
+  else                                    // 否则则设置缓冲区末端=1Mb
+    buffer_memory_end = 1*1024*1024;
+  
+  main_memory_start = buffer_memory_end;  // 主内存(用于分页使用)起始位置=缓冲区末端
+                                          // 缓冲区之后就是主内存
+  
+  // 如果 makefile 文件中设置了 “虚拟盘使用标志”
+  // 操作系统从缓冲区末端开辟 2 MB 内存空间做为虚拟盘
+  // 主内存起始位置后移 2 MB 至虚拟盘的末端
+  #ifdef RAMDISK
+  main_memory_start += rd_init(main_memory_start, RAMDISK*1024);
+  // kernel/ramdisk.c
+  #endif
 
  mem_init(main_memory_start,memory_end);  // 
  

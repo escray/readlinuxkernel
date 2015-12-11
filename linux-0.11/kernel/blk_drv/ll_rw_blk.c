@@ -29,6 +29,7 @@ struct task_struct * wait_for_request = NULL;
  *	do_request-address
  *	next-request
  */
+ // kernel/blk_drv/blk.h
 struct blk_dev_struct blk_dev[NR_BLK_DEV] = {
 	{ NULL, NULL },		/* no_dev */
 	{ NULL, NULL },		/* dev mem */

@@ -54,10 +54,14 @@ long rd_init(long mem_start, int length)
 	int	i;
 	char	*cp;
 
+	// kernel/blk_drv/11_rw_blk.c 
+	// kernel/blk_drv/blk.h
+	// 挂接 do_rd_request()
 	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;
 	rd_start = (char *) mem_start;
 	rd_length = length;
 	cp = rd_start;
+	// 将内存中虚拟磁盘位置全部置为'\0'
 	for (i=0; i < length; i++)
 		*cp++ = '\0';
 	return(length);
