@@ -66,11 +66,12 @@ extern long startup_time;
  * bios-listing reading. Urghh.
  */
 
-#define CMOS_READ(addr) ({ \
-outb_p(0x80|addr,0x70); \
-inb_p(0x71); \
+#define CMOS_READ(addr) ({ \		// 读取 CMOS 实时时钟信息
+outb_p(0x80|addr,0x70); \				// 0x80|addr 读 CMOS 地址，0x70 写端口
+inb_p(0x71); \									// 0x71 读端口
 })
 
+// 十进制转二进制
 #define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)
 
 static void time_init(void)
@@ -78,7 +79,7 @@ static void time_init(void)
 	struct tm time;
 
 	do {
-		time.tm_sec = CMOS_READ(0);
+		time.tm_sec = CMOS_READ(0);					// 当前时间的秒值
 		time.tm_min = CMOS_READ(2);
 		time.tm_hour = CMOS_READ(4);
 		time.tm_mday = CMOS_READ(7);
@@ -92,7 +93,7 @@ static void time_init(void)
 	BCD_TO_BIN(time.tm_mon);
 	BCD_TO_BIN(time.tm_year);
 	time.tm_mon--;
-	startup_time = kernel_mktime(&time);
+	startup_time = kernel_mktime(&time);	// 开机时间，从 1970-01-01 00:00 开始计算
 }
 
 static long memory_end = 0;

@@ -43,6 +43,7 @@ void show_stat(void)
 			show_task(i,task[i]);
 }
 
+// 每个时间片的震荡次数
 #define LATCH (1193180/HZ)
 
 extern void mem_use(void);

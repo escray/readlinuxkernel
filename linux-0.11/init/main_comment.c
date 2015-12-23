@@ -135,16 +135,16 @@ static inline _syscall0(int,sync)   // int sync ()系统调用。
 
 static char printbuf[1024];
 
-extern int vsprintf();
+extern int  vsprintf();
 extern void init(void);
-extern void blk_dev_init(void); // 块设备初始化。
-extern void chr_dev_init(void); // 字符设备初始化。
-extern void hd_init(void);  // 硬盘初始化程序。
-extern void floppy_init(void); // 软盘初始化程序。
-extern void mem_init(long start, long end);   // 内存管理程序初始化。
-extern long rd_init(long mem_start, int length); // 虚拟盘初始化
-extern long kernel_mktime(struct tm * tm);   // 建立内核时间
-extern long startup_time;       // 内核启动时间（开机时间）（秒）.
+extern void blk_dev_init(void);                   // 块设备初始化。
+extern void chr_dev_init(void);                   // 字符设备初始化。
+extern void hd_init(void);                        // 硬盘初始化程序。
+extern void floppy_init(void);                    // 软盘初始化程序。
+extern void mem_init(long start, long end);       // 内存管理程序初始化。
+extern long rd_init(long mem_start, int length);  // 虚拟盘初始化
+extern long kernel_mktime(struct tm * tm);        // 建立内核时间
+extern long startup_time;                         // 内核启动时间（开机时间）（秒）.
 
 /*
  * This is set up by the setup-routine at boot-time
@@ -163,22 +163,25 @@ extern long startup_time;       // 内核启动时间（开机时间）（秒）
  * bios-listing reading. Urghh.
  */
 
-#define CMOS_READ(addr) ({ \   // 这段宏读取cmos实时时钟信息。
-outb_p(0x80|addr,0x70); \    // 0x70是些端口号，0x80|addr 是要读取的CMOS 内存地址
-inb_p(0x71); \       // 0x71 是读端口号。
+#define CMOS_READ(addr) ({ \    // 这段宏读取cmos实时时钟信息。
+outb_p(0x80|addr,0x70); \       // 0x70是写端口号，0x80|addr 是要读取的CMOS 内存地址
+inb_p(0x71); \                  // 0x71 是读端口号。
 })
 
-#define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)   // 将BCD 码转换成数字.
+// 将BCD 码转换成数字.
+// 二进制转十进制
+#define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)   
 
-//----------------------------------------------------------------------------------
+//----------------------------------------------------------
 //        time_init
-//------------------------------------------------------------------------------------
-static void time_init(void)    // 读取cmos中的信息，初始化全局变量startup_time
+//----------------------------------------------------------
+// 读取cmos中的信息，初始化全局变量startup_time
+static void time_init(void)    
 {
  struct tm time;
 
  do {
-  time.tm_sec = CMOS_READ(0);
+  time.tm_sec = CMOS_READ(0);   // 当前时间的秒值
   time.tm_min = CMOS_READ(2);
   time.tm_hour = CMOS_READ(4);
   time.tm_mday = CMOS_READ(7);
@@ -192,8 +195,8 @@ static void time_init(void)    // 读取cmos中的信息，初始化全局变量
  BCD_TO_BIN(time.tm_mday);
  BCD_TO_BIN(time.tm_mon);
  BCD_TO_BIN(time.tm_year);
- time.tm_mon--;      // months since January - [0,11]
- startup_time = kernel_mktime(&time);
+ time.tm_mon--;                         // months since January - [0,11]
+ startup_time = kernel_mktime(&time);   // 开机时间，从 1970-01-01 00:00 开始计算
 }
 
 static long memory_end          = 0;    // 机器具有的内存（字节数）
@@ -247,33 +250,40 @@ void main(void)   /* This really IS void, no error here. */
   // kernel/ramdisk.c
   #endif
 
- mem_init(main_memory_start,memory_end);  // 
- 
- trap_init();        // 陷阱门（硬件中断向量）初始化
- 
- blk_dev_init();        // 块设备初始化
- 
- chr_dev_init();        // 字符设备初始化
- 
- tty_init();         // tty 初始化
- 
- time_init();        // 设置开机启动时间,startup_time
- 
- sched_init();        // 调度程序初始化
- 
- buffer_init(buffer_memory_end);    // 缓冲管理初始化，建内存链表等.
- 
- hd_init();         // 硬盘初始化
- 
- floppy_init();        // 软盘初始化
- 
- sti();          // 设置完成，开启中断。
- 
- move_to_user_mode();      // 移到用户模式
+  // mm/memory.c
+  mem_init(main_memory_start,memory_end);
+  // 陷阱门（硬件中断向量）初始化
+  // trap_init()函数将中断、异常处理的服务程序与IDT进行挂接，
+  // 逐步重建中断服务体系，支持内核、进程在主机中的运算
+  // kernel/traps.c
+  trap_init();
+  // 块设备初始化 
+  // kernel/blk_dev/blk.h        
+  blk_dev_init();        
+  // 字符设备初始化
+  // 空函数
+  // kernel/chr_dev/tty_io.c
+  chr_dev_init();        
+  // tty 初始化
+  tty_init();         
+  // 设置开机启动时间,startup_time
+  time_init();        
+  // 调度程序初始化 
+  sched_init();        
+  // 缓冲管理初始化，建内存链表等.
+  buffer_init(buffer_memory_end);    
+  // 硬盘初始化
+  hd_init();         
+  // 软盘初始化
+  floppy_init();        
+  // 设置完成，开启中断。
+  sti();          
+  // 移到用户模式
+  move_to_user_mode();      
 
- if (!fork()) {  /* we count on this going ok */
-  init();
- }
+  if (!fork()) {  /* we count on this going ok */
+    init();
+  }
 /*
  *   NOTE!!   For any other task 'pause()' would mean we have to get a
  * signal to awaken, but task0 is the sole exception (see 'schedule()')

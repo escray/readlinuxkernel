@@ -178,31 +178,59 @@ void do_reserved(long esp, long error_code)
 	die("reserved (15,17-47) error",esp,error_code);
 }
 
+// trap_init()函数将中断、异常处理的服务程序与IDT进行挂接，
+// 逐步重建中断服务体系，支持内核、进程在主机中的运算
 void trap_init(void)
 {
 	int i;
 
+	// 除零错误
 	set_trap_gate(0,&divide_error);
+	// 单步调试
 	set_trap_gate(1,&debug);
+	// 不可屏蔽中断
 	set_trap_gate(2,&nmi);
+	
 	set_system_gate(3,&int3);	/* int3-5 can be called from all */
+	// 溢出
 	set_system_gate(4,&overflow);
+	// 边界检查错误
 	set_system_gate(5,&bounds);
+	// 无效指令
 	set_trap_gate(6,&invalid_op);
+	// 无效设备
 	set_trap_gate(7,&device_not_available);
+	// 双故障
 	set_trap_gate(8,&double_fault);
+	// 协处理器段越界
 	set_trap_gate(9,&coprocessor_segment_overrun);
+	// 无效 TSS
 	set_trap_gate(10,&invalid_TSS);
+	// 段不存在
 	set_trap_gate(11,&segment_not_present);
+	// 栈异常
 	set_trap_gate(12,&stack_segment);
+	// 一般性保护异常
 	set_trap_gate(13,&general_protection);
+	// 缺页
 	set_trap_gate(14,&page_fault);
+	// 保留
 	set_trap_gate(15,&reserved);
+	// 协处理器错误
 	set_trap_gate(16,&coprocessor_error);
+
+	// 都先挂接好，中断服务程序函数名初始化为保留
+	// 将 IDT 的 int 0x11 ~ int 0x2F 初始化
+	// 将 IDT 中对应的指向中断服务程序的指针设置为 reserved（保留）
 	for (i=17;i<48;i++)
 		set_trap_gate(i,&reserved);
+	
+	// 协处理器
 	set_trap_gate(45,&irq13);
+	// 允许 IRQ2 中断请求
 	outb_p(inb_p(0x21)&0xfb,0x21);
+	// 允许 IRQ3 中断请求 ?
 	outb(inb_p(0xA1)&0xdf,0xA1);
+	// 设置并口（可以接打印机）的 IDT 项
 	set_trap_gate(39,&parallel_interrupt);
 }

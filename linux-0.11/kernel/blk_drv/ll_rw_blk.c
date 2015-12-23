@@ -18,6 +18,7 @@
  * The request-struct contains all necessary data
  * to load a nr of sectors into memory
  */
+// request[32] 是一个由数组构成的链表 
 struct request request[NR_REQUEST];
 
 /*
@@ -160,6 +161,10 @@ void blk_dev_init(void)
 	int i;
 
 	for (i=0 ; i<NR_REQUEST ; i++) {
+		// request[32] 是一个由数组构成的链表 
+		// request[i].dev = -1说明了这个请求项还没有具体对应哪个设备，
+		// 这个标志将来会被用来判断对应该请求项的当前设备是否空闲；
+		// request[i].next= NULL说明这时还没有形成请求项队列。
 		request[i].dev = -1;
 		request[i].next = NULL;
 	}
