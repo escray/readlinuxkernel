@@ -51,11 +51,14 @@ extern void mem_use(void);
 extern int timer_interrupt(void);
 extern int system_call(void);
 
+// task_struct 与内核栈的共用结构体
 union task_union {
 	struct task_struct task;
+	// PAGE_SIZE = 4 KB
 	char stack[PAGE_SIZE];
 };
 
+// 进程 0 的 task_struct
 static union task_union init_task = {INIT_TASK,};
 
 long volatile jiffies=0;
@@ -63,6 +66,8 @@ long startup_time=0;
 struct task_struct *current = &(init_task.task);
 struct task_struct *last_task_used_math = NULL;
 
+// 初始化进程槽 task[NR_TASKS] 的第一项为进程 0
+// 即 task[0] 为进程 0 占用
 struct task_struct * task[NR_TASKS] = {&(init_task.task), };
 
 long user_stack [ PAGE_SIZE>>2 ] ;
@@ -390,8 +395,13 @@ void sched_init(void)
 
 	if (sizeof(struct sigaction) != 16)
 		panic("Struct sigaction MUST be 16 bytes");
+	// 设置 TSS0
 	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));
+	// set LDT0
 	set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt));
+	// 从 GDT 的第 6 项，即 TSS1 开始，向上全部清零，
+	// 并且将进程槽从 1 往后的项清空。
+	// 0 项为进程 0 所用
 	p = gdt+2+FIRST_TSS_ENTRY;
 	for(i=1;i<NR_TASKS;i++) {
 		task[i] = NULL;
@@ -402,12 +412,19 @@ void sched_init(void)
 	}
 /* Clear NT, so that we won't have troubles with that later on */
 	__asm__("pushfl ; andl $0xffffbfff,(%esp) ; popfl");
+	// 重要！将 TSS 挂接到 TR 寄存器
 	ltr(0);
+	// 重要！将 LDT 挂接到 LDTR 寄存器
 	lldt(0);
+	// 设置定时器
 	outb_p(0x36,0x43);		/* binary, mode 3, LSB/MSB, ch 0 */
+	// 每 10 毫秒一次时钟中断
 	outb_p(LATCH & 0xff , 0x40);	/* LSB */
 	outb(LATCH >> 8 , 0x40);	/* MSB */
+	// 重要！设置时钟中断，进程调度的基础
 	set_intr_gate(0x20,&timer_interrupt);
+	// 允许时钟中断
 	outb(inb_p(0x21)&~0x01,0x21);
+	// 重要！设置系统调用总入口
 	set_system_gate(0x80,&system_call);
 }

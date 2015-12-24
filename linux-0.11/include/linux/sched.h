@@ -110,11 +110,12 @@ struct task_struct {
  *  INIT_TASK is used to set up the first task table, touch at
  * your own risk!. Base=0, limit=0x9ffff (=640kB)
  */
+ // 进程 0 的 task_struct
 #define INIT_TASK \
-/* state etc */	{ 0,15,15, \
+/* state etc */	{ 0,15,15, \						// 就绪态（runable），15个时间片，优先级 15
 /* signals */	0,{{},},0, \
 /* ec,brk... */	0,0,0,0,0,0, \
-/* pid etc.. */	0,-1,0,0,0, \
+/* pid etc.. */	0,-1,0,0,0, \						// 进程 0，father = -1
 /* uid etc */	0,0,0,0,0,0, \
 /* alarm */	0,0,0,0,0,0, \
 /* math */	0, \
@@ -126,7 +127,8 @@ struct task_struct {
 		{0x9f,0xc0f200}, \
 	}, \
 /*tss*/	{0,PAGE_SIZE+(long)&init_task,0x10,0,0,0,0,(long)&pg_dir,\
-	 0,0,0,0,0,0,0,0, \
+	 0,0,0,0,0,0,0,0, \										// eflags = 0，
+	 																			// 决定了 cli 这类指令只能在 0 特权级使用 
 	 0,0,0x17,0x17,0x17,0x17,0x17,0x17, \
 	 _LDT(0),0x80000000, \
 		{} \
@@ -150,7 +152,9 @@ extern void wake_up(struct task_struct ** p);
  * Entry into gdt where to find first TSS. 0-nul, 1-cs, 2-ds, 3-syscall
  * 4-TSS0, 5-LDT0, 6-TSS1 etc ...
  */
+// TSS0 入口
 #define FIRST_TSS_ENTRY 4
+// LDT0 入口
 #define FIRST_LDT_ENTRY (FIRST_TSS_ENTRY+1)
 #define _TSS(n) ((((unsigned long) n)<<4)+(FIRST_TSS_ENTRY<<3))
 #define _LDT(n) ((((unsigned long) n)<<4)+(FIRST_LDT_ENTRY<<3))

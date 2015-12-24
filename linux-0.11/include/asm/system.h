@@ -51,17 +51,24 @@ __asm__ ("movw %%dx,%%ax\n\t" \ // 将 edx 的低字复制给 eax 的低字
 		((limit) & 0x0ffff); }
 
 #define _set_tssldt_desc(n,addr,type) \
-__asm__ ("movw $104,%1\n\t" \
-	"movw %%ax,%2\n\t" \
-	"rorl $16,%%eax\n\t" \
-	"movb %%al,%3\n\t" \
-	"movb $" type ",%4\n\t" \
-	"movb $0x00,%5\n\t" \
-	"movb %%ah,%6\n\t" \
-	"rorl $16,%%eax" \
+__asm__ ("movw $104,%1\n\t" \				// 将 104，即 110 1000 存入描述符的第1、2字节
+	"movw %%ax,%2\n\t" \							// 将 tss 或 ldt 基地址的低 16 位
+																		// 存入描述符的第 3，4 字节
+	"rorl $16,%%eax\n\t" \						// 循环右移 16 位，即高、低字互换
+	"movb %%al,%3\n\t" \							// 将互换完的第 1 字节
+																		// 即地址的第 3 字节存入第 5 字节
+	"movb $" type ",%4\n\t" \					// 将 0x89 或 0x82 存入第 6 字节
+	"movb $0x00,%5\n\t" \							// 将 0x00 存入第 7 字节
+	"movb %%ah,%6\n\t" \							// 将互换完的第 2 字节，
+																		// 即地址的第 4 字节存入第 8 字节
+	"rorl $16,%%eax" \								// 复原 eax
 	::"a" (addr), "m" (*(n)), "m" (*(n+2)), "m" (*(n+4)), \
 	 "m" (*(n+5)), "m" (*(n+6)), "m" (*(n+7)) \
+	// “m” (*(n)) 是 gdt 的第 n 项描述符的地址开始的内存单元
+	// "m" (*(n+2)) 是 gdt 的第 n 项描述符的地址向上第 3 字节开始的内存单元
 	)
 
+// n: gdt 的项值，addr: tss 或 ldt 的地址
+// 0x89 对应 tss, 0x82 对应 ldt
 #define set_tss_desc(n,addr) _set_tssldt_desc(((char *) (n)),addr,"0x89")
 #define set_ldt_desc(n,addr) _set_tssldt_desc(((char *) (n)),addr,"0x82")

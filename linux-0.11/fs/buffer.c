@@ -355,6 +355,7 @@ void buffer_init(long buffer_end)
 		b = (void *) (640*1024);
 	else
 		b = (void *) buffer_end;
+	// h, b 分别从缓冲区的低地址端和高地址端开始，每次对进 buffer_head, 缓冲块各一个
 	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) {
 		h->b_dev = 0;
 		h->b_dirt = 0;
@@ -362,9 +363,12 @@ void buffer_init(long buffer_end)
 		h->b_lock = 0;
 		h->b_uptodate = 0;
 		h->b_wait = NULL;
+		// h->b_next 和 h->bprev 初始化为空，后面将与 hash_table 挂接
 		h->b_next = NULL;
 		h->b_prev = NULL;
+		// 为每个 buffer_head 关联一个缓冲块
 		h->b_data = (char *) b;
+		// 将 buffer_head 分别与前后 buffer_head 挂接，形成双向链表
 		h->b_prev_free = h-1;
 		h->b_next_free = h+1;
 		h++;
