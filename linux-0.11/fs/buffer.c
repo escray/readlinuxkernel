@@ -365,7 +365,7 @@ void buffer_init(long buffer_end)
 		h->b_wait = NULL;
 		// h->b_next 和 h->bprev 初始化为空，后面将与 hash_table 挂接
 		h->b_next = NULL;
-		h->b_prev = NULL;
+		h->b_prev = NULL;d
 		// 为每个 buffer_head 关联一个缓冲块
 		h->b_data = (char *) b;
 		// 将 buffer_head 分别与前后 buffer_head 挂接，形成双向链表
