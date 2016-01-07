@@ -26,6 +26,8 @@
 #include <asm/system.h>
 #include <asm/io.h>
 
+// end 是内核代码末端的地址
+// 在内核模块链接期间设置 end 的值
 extern int end;
 struct buffer_head * start_buffer = (struct buffer_head *) &end;
 struct buffer_head * hash_table[NR_HASH];
@@ -356,6 +358,7 @@ void buffer_init(long buffer_end)
 	else
 		b = (void *) buffer_end;
 	// h, b 分别从缓冲区的低地址端和高地址端开始，每次对进 buffer_head, 缓冲块各一个
+	// 忽略剩余不足一对 buffer_head, 缓冲块的空间
 	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) {
 		h->b_dev = 0;
 		h->b_dirt = 0;
@@ -365,7 +368,7 @@ void buffer_init(long buffer_end)
 		h->b_wait = NULL;
 		// h->b_next 和 h->bprev 初始化为空，后面将与 hash_table 挂接
 		h->b_next = NULL;
-		h->b_prev = NULL;d
+		h->b_prev = NULL;
 		// 为每个 buffer_head 关联一个缓冲块
 		h->b_data = (char *) b;
 		// 将 buffer_head 分别与前后 buffer_head 挂接，形成双向链表
@@ -373,13 +376,17 @@ void buffer_init(long buffer_end)
 		h->b_next_free = h+1;
 		h++;
 		NR_BUFFERS++;
+		// 避开 ROMBIOS & VGA
 		if (b == (void *) 0x100000)
 			b = (void *) 0xA0000;
 	}
 	h--;
+	// free_list 指向第一个 buffer_head
 	free_list = start_buffer;
+	// 使 buffer_head 双向链表形成双向环链表
 	free_list->b_prev_free = h;
 	h->b_next_free = free_list;
+	// 清空 hash_table[307]
 	for (i=0;i<NR_HASH;i++)
 		hash_table[i]=NULL;
 }	

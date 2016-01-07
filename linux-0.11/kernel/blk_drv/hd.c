@@ -340,10 +340,15 @@ void do_hd_request(void)
 		panic("unknown hd-command");
 }
 
+// reference the comment of rd_init() in ramdisk.c
 void hd_init(void)
 {
+	// 挂接 do_hd_request()
 	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;
+	// 设置硬盘中断
 	set_intr_gate(0x2E,&hd_interrupt);
+	// 允许 8259A 发出中断请求
 	outb_p(inb_p(0x21)&0xfb,0x21);
+	// 允许硬盘发送中断请求
 	outb(inb_p(0xA1)&0xbf,0xA1);
 }

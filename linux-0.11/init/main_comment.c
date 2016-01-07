@@ -227,7 +227,8 @@ void main(void)   /* This really IS void, no error here. */
  
   memory_end = (1<<20) + (EXT_MEM_K<<10); // 内存大小=1Mb 字节+扩展内存(k)*1024 字节
   memory_end &= 0xfffff000;               // 忽略不到4Kb（1 页）的内存数
-                                          // 按页的倍数取整，忽略内存末端不足一页的部分
+                                          // 按页的倍数取整，
+                                          // 忽略内存末端不足一页的部分
   
   if (memory_end > 16*1024*1024)          // 如果内存超过16Mb，则按16Mb 计
     memory_end = 16*1024*1024;
@@ -279,6 +280,7 @@ void main(void)   /* This really IS void, no error here. */
   // 设置完成，开启中断。
   sti();          
   // 移到用户模式
+  // 模仿中断返回动作，实现进程 0 的特权级从 0 转变为 3
   move_to_user_mode();      
 
   if (!fork()) {  /* we count on this going ok */

@@ -1,5 +1,8 @@
 extern int sys_setup();
 extern int sys_exit();
+// 对应system_call.s 中的 _sys_fork，
+// 汇编中对应 C 语言的函数名在前面多加一个下划线"_"，
+// 如 C 语言的 sys_fork 对应汇编的就是 _sys_fork
 extern int sys_fork();
 extern int sys_read();
 extern int sys_write();
@@ -71,6 +74,7 @@ extern int sys_ssetmask();
 extern int sys_setreuid();
 extern int sys_setregid();
 
+// sys_fork 对应 _sys_call_table 的第三项
 fn_ptr sys_call_table[] = { sys_setup, sys_exit, sys_fork, sys_read,
 sys_write, sys_open, sys_close, sys_waitpid, sys_creat, sys_link,
 sys_unlink, sys_execve, sys_chdir, sys_time, sys_mknod, sys_chmod,

@@ -1,4 +1,5 @@
-http://www.cnblogs.com/xuqiang/archive/2010/02/16/1953757.html
+
+aq DMASCWQSZ  CCQ 1`WD`WF http://www.cnblogs.com/xuqiang/archive/2010/02/16/1953757.html
 #
 # 这段代码被连接到system模块的最前面，这也是它为什么称之为 head.s 的原因。
 # 从这里开始内核完全运行在保护模式下。head.s采用的是 at&t 格式的

@@ -132,16 +132,23 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	return last_pid;
 }
 
+// find an available slot for creating new process
+// NR_task = 64
+// global field last_pid store the process counter from system start
+// and can be the new process number
 int find_empty_process(void)
 {
 	int i;
 
 	repeat:
+		// if ++last_pic overflowed, then last_pid = 1
 		if ((++last_pid)<0) last_pid=1;
+		// now, last_pid = 1, then find valid last_pid
 		for(i=0 ; i<NR_TASKS ; i++)
 			if (task[i] && task[i]->pid == last_pid) goto repeat;
+	// return first available i
 	for(i=1 ; i<NR_TASKS ; i++)
 		if (!task[i])
 			return i;
-	return -EAGAIN;
+	return -EAGAIN;			//EAGAIN = 11
 }

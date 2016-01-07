@@ -1,18 +1,22 @@
+// 模仿中断硬件压栈，顺序是 ss, esp, eflags, cs, eip
 #define move_to_user_mode() \
 __asm__ ("movl %%esp,%%eax\n\t" \
-	"pushl $0x17\n\t" \
-	"pushl %%eax\n\t" \
-	"pushfl\n\t" \
-	"pushl $0x0f\n\t" \
-	"pushl $1f\n\t" \
-	"iret\n" \
-	"1:\tmovl $0x17,%%eax\n\t" \
+	"pushl $0x17\n\t" \							// SS 进栈，
+																	// 0X17 即二进制的 10111 (3 特权级、LDT、数据段)
+	"pushl %%eax\n\t" \							// ESP 进栈
+	"pushfl\n\t" \									// EFLAGS 进栈
+	"pushl $0x0f\n\t" \							// CS 进栈
+																	// 0X0F 即 1111（3特权级、LDT、数据段）
+	"pushl $1f\n\t" \								// EIP 进栈
+	"iret\n" \											// 出栈恢复现场、翻转特权级从 0 到 3
+	"1:\tmovl $0x17,%%eax\n\t" \		// 以下代码使 ds, es, fs, gs 与 ss 一致
 	"movw %%ax,%%ds\n\t" \
 	"movw %%ax,%%es\n\t" \
 	"movw %%ax,%%fs\n\t" \
 	"movw %%ax,%%gs" \
 	:::"ax")
 
+// 开中断
 #define sti() __asm__ ("sti"::)
 #define cli() __asm__ ("cli"::)
 #define nop() __asm__ ("nop"::)

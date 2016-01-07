@@ -77,34 +77,37 @@ reschedule:
 	pushl $ret_from_sys_call
 	jmp _schedule
 .align 2
-_system_call:
+_system_call:										# int 0x80 the entrance of system call 
 	cmpl $nr_system_calls-1,%eax
 	ja bad_sys_call
-	push %ds
+	push %ds											# six push for parameter of copy_process()
+																# remember the order of push
+																# int 0x80 also push 5 regist value into stack
 	push %es
 	push %fs
 	pushl %edx
-	pushl %ecx		# push %ebx,%ecx,%edx as parameters
-	pushl %ebx		# to the system call
-	movl $0x10,%edx		# set up ds,es to kernel space
+	pushl %ecx										# push %ebx,%ecx,%edx as parameters
+	pushl %ebx										# to the system call
+	movl $0x10,%edx								# set up ds,es to kernel space
 	mov %dx,%ds
 	mov %dx,%es
-	movl $0x17,%edx		# fs points to local data space
+	movl $0x17,%edx								# fs points to local data space
 	mov %dx,%fs
-	call _sys_call_table(,%eax,4)
+	call _sys_call_table(,%eax,4) # eax = 2, => call(_sys_call_table + 2×4) 
+																# is entrance of _sys_fork
 	pushl %eax
 	movl _current,%eax
-	cmpl $0,state(%eax)		# state
+	cmpl $0,state(%eax)						# state
 	jne reschedule
-	cmpl $0,counter(%eax)		# counter
+	cmpl $0,counter(%eax)					# counter
 	je reschedule
 ret_from_sys_call:
-	movl _current,%eax		# task[0] cannot have signals
+	movl _current,%eax						# task[0] cannot have signals
 	cmpl _task,%eax
 	je 3f
-	cmpw $0x0f,CS(%esp)		# was old code segment supervisor ?
+	cmpw $0x0f,CS(%esp)						# was old code segment supervisor ?
 	jne 3f
-	cmpw $0x17,OLDSS(%esp)		# was stack segment = 0x17 ?
+	cmpw $0x17,OLDSS(%esp)				# was stack segment = 0x17 ?
 	jne 3f
 	movl signal(%eax),%ebx
 	movl blocked(%eax),%ecx
@@ -206,15 +209,16 @@ _sys_execve:
 
 .align 2
 _sys_fork:
-	call _find_empty_process
-	testl %eax,%eax
+	call _find_empty_process	# call find_empty_process()
+	testl %eax,%eax						# if return value is -EAGAIN(11)
+														# then 64 process had been executed
 	js 1f
-	push %gs
+	push %gs									# 5 push as init parameter for copy_process()
 	pushl %esi
 	pushl %edi
 	pushl %ebp
 	pushl %eax
-	call _copy_process
+	call _copy_process				# call copy_process()
 	addl $20,%esp
 1:	ret
 
