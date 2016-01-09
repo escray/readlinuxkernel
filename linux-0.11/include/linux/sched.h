@@ -189,11 +189,11 @@ __asm__("cmpl %%ecx,_current\n\t" \
 
 #define PAGE_ALIGN(n) (((n)+0xfff)&0xfffff000)
 
-#define _set_base(addr,base) \
-__asm__("movw %%dx,%0\n\t" \
-	"rorl $16,%%edx\n\t" \
-	"movb %%dl,%1\n\t" \
-	"movb %%dh,%2" \
+#define _set_base(addr,base) \	// 用 base 设置 addr
+__asm__("movw %%dx,%0\n\t" \		// 将段地址(edx)的低 16 位存入 addr 的 3、4 字节 ？
+	"rorl $16,%%edx\n\t" \				// 循环右移 16 位，高、低字互换
+	"movb %%dl,%1\n\t" \					// 将互换后 1st 字节，地址的 3rd 字节存入 5th 字节 ？
+	"movb %%dh,%2" \							// 将互换后 2nd 字节，地址的 4th 字节存入 8th 字节 ？
 	::"m" (*((addr)+2)), \
 	  "m" (*((addr)+4)), \
 	  "m" (*((addr)+7)), \
@@ -201,12 +201,12 @@ __asm__("movw %%dx,%0\n\t" \
 	:"dx")
 
 #define _set_limit(addr,limit) \
-__asm__("movw %%dx,%0\n\t" \
-	"rorl $16,%%edx\n\t" \
-	"movb %1,%%dh\n\t" \
-	"andb $0xf0,%%dh\n\t" \
+__asm__("movw %%dx,%0\n\t" \	// 将段地址的低 16 位存入 addr 的 1、2 字节 ？
+	"rorl $16,%%edx\n\t" \			// 循环右移 16 位，高低字互换
+	"movb %1,%%dh\n\t" \				// 将互换后的 2st 字节设置为 1(0000 0001) ？
+	"andb $0xf0,%%dh\n\t" \     
 	"orb %%dh,%%dl\n\t" \
-	"movb %%dl,%1" \
+	"movb %%dl,%1" \						// 将计算后的 1st 字节存入 7th 字节 ？
 	::"m" (*(addr)), \
 	  "m" (*((addr)+6)), \
 	  "d" (limit) \
@@ -215,7 +215,7 @@ __asm__("movw %%dx,%0\n\t" \
 #define set_base(ldt,base) _set_base( ((char *)&(ldt)) , base )
 #define set_limit(ldt,limit) _set_limit( ((char *)&(ldt)) , (limit-1)>>12 )
 
-#define _get_base(addr) ({\
+#define _get_base(addr) ({\			// 获取 addr 段基址
 unsigned long __base; \
 __asm__("movb %3,%%dh\n\t" \
 	"movb %2,%%dl\n\t" \
@@ -231,6 +231,7 @@ __base;})
 
 #define get_limit(segment) ({ \
 unsigned long __limit; \
+// 取 segment 的段限长，赋值给 __limit
 __asm__("lsll %1,%0\n\tincl %0":"=r" (__limit):"r" (segment)); \
 __limit;})
 

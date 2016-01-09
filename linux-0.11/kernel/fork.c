@@ -35,23 +35,30 @@ void verify_area(void * addr,int size)
 		start += 4096;
 	}
 }
-
+// 设置子进程的代码段、数据段，并且创建、复制子进程的第一个页表
 int copy_mem(int nr,struct task_struct * p)
 {
 	unsigned long old_data_base,new_data_base,data_limit;
 	unsigned long old_code_base,new_code_base,code_limit;
 
+	// 取子进程的代码、数据段限长
+	// 0x0f 即 0 1111：代码段、LDT、3 特权级
 	code_limit=get_limit(0x0f);
+	// 0x17 即 1 0111：数据段、LDT、3 特权级
 	data_limit=get_limit(0x17);
+	// 获取父进程（ 进程0 ）的代码段、数据段基址
 	old_code_base = get_base(current->ldt[1]);
 	old_data_base = get_base(current->ldt[2]);
 	if (old_data_base != old_code_base)
 		panic("We don't support separate I&D");
 	if (data_limit < code_limit)
 		panic("Bad data_limit");
+	// 现在 nr 是 1，0x4000000 是 64 MB
 	new_data_base = new_code_base = nr * 0x4000000;
 	p->start_code = new_code_base;
+	// 设置子进程代码段基址
 	set_base(p->ldt[1],new_code_base);
+	// 设置子进程数据段基址
 	set_base(p->ldt[2],new_data_base);
 	if (copy_page_tables(old_data_base,new_data_base,data_limit)) {
 		free_page_tables(new_data_base,data_limit);
@@ -65,6 +72,7 @@ int copy_mem(int nr,struct task_struct * p)
  * information (task[nr]) and sets up the necessary registers. It
  * also copies the data segment in it's entirety.
  */
+ // 这些参数是 int 0X80, system_call, sys_fork 多次累计压栈的结果，顺序是完全一致的
 int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 		long ebx,long ecx,long edx,
 		long fs,long es,long ds,
@@ -74,12 +82,18 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	int i;
 	struct file *f;
 
+	// 在 16 MB 内存的最高端获取一页
+	// 强制类型转换的意思是将这个页用作 task_union
 	p = (struct task_struct *) get_free_page();
 	if (!p)
 		return -EAGAIN;
-	task[nr] = p;
+	task[nr] = p;		// nr = 1
+	// current 指向当前进程的 task_struct 指针，当前进程是进程 0
+	// 指针类型，只复制 task_struct，并未将 4 KB 都复制，即进程 0 的内核栈未复制
 	*p = *current;	/* NOTE! this doesn't copy the supervisor stack */
+	// 只有内核代码中明确表示将该进程设置为就绪状态才能被唤醒
 	p->state = TASK_UNINTERRUPTIBLE;
+	// 开始子进程的个性化设置
 	p->pid = last_pid;
 	p->father = current->pid;
 	p->counter = p->priority;
@@ -89,11 +103,16 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	p->utime = p->stime = 0;
 	p->cutime = p->cstime = 0;
 	p->start_time = jiffies;
+	// start to set the TSS of subprocess
 	p->tss.back_link = 0;
+	// esp0 is the reference to kernel stack
 	p->tss.esp0 = PAGE_SIZE + (long) p;
+	// 0X10， （10000），0 特权级，GDT，数据段
 	p->tss.ss0 = 0x10;
+	// 参数的 EIP，是 int 0X80 压栈的，指向 if (__res >= 0)
 	p->tss.eip = eip;
 	p->tss.eflags = eflags;
+	// 决定 main() 函数中 if(!fork()) 后面的分支走向
 	p->tss.eax = 0;
 	p->tss.ecx = ecx;
 	p->tss.edx = edx;
@@ -108,18 +127,22 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	p->tss.ds = ds & 0xffff;
 	p->tss.fs = fs & 0xffff;
 	p->tss.gs = gs & 0xffff;
+	// 挂接子进程的 LDT
 	p->tss.ldt = _LDT(nr);
 	p->tss.trace_bitmap = 0x80000000;
 	if (last_task_used_math == current)
 		__asm__("clts ; fnsave %0"::"m" (p->tss.i387));
+	// 设置子进程的代码段、数据段，并且创建、复制子进程的第一个页表
 	if (copy_mem(nr,p)) {
 		task[nr] = NULL;
 		free_page((long) p);
 		return -EAGAIN;
 	}
+	// 将父进程相关文件引用系数加 1，表示父子进程共享文件
 	for (i=0; i<NR_OPEN;i++)
 		if (f=p->filp[i])
 			f->f_count++;
+
 	if (current->pwd)
 		current->pwd->i_count++;
 	if (current->root)

@@ -60,6 +60,7 @@ static unsigned char mem_map [ PAGING_PAGES ] = {0,};
  * Get physical address of first (actually last :-) free page, and mark it
  * used. If no free pages left, return 0.
  */
+ // 遍历 mem map[], 找到主存中（从高地址开始）第一个空闲页面
 unsigned long get_free_page(void)
 {
 register unsigned long __res asm("ax");
