@@ -37,12 +37,12 @@ static inline volatile void oom(void)
 }
 
 #define invalidate() \
-__asm__("movl %%eax,%%cr3"::"a" (0))
+__asm__("movl %%eax,%%cr3"::"a" (0)) 			// 重置 CR3 为 0
 
 /* these are not to be changed without changing head.s etc */
-#define LOW_MEM 0x100000
-#define PAGING_MEMORY (15*1024*1024)
-#define PAGING_PAGES (PAGING_MEMORY>>12)
+#define LOW_MEM 0x100000 									// 1 MB
+#define PAGING_MEMORY (15*1024*1024) 			// 15 MB 
+#define PAGING_PAGES (PAGING_MEMORY>>12) 	// 乘以 4 KB = 15 MB 的页数
 #define MAP_NR(addr) (((addr)-LOW_MEM)>>12)
 #define USED 100
 
@@ -54,13 +54,14 @@ static long HIGH_MEMORY = 0;
 #define copy_page(from,to) \
 __asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024):"cx","di","si")
 
+// 系统通过 mem_map[] 对 1 MB 以上的内存分页进行管理
+// 记录一个页面的使用次数
 static unsigned char mem_map [ PAGING_PAGES ] = {0,};
 
 /*
  * Get physical address of first (actually last :-) free page, and mark it
  * used. If no free pages left, return 0.
  */
- // 遍历 mem map[], 找到主存中（从高地址开始）第一个空闲页面
 unsigned long get_free_page(void)
 {
 register unsigned long __res asm("ax");
@@ -402,11 +403,14 @@ void mem_init(long start_mem, long end_mem)
 	int i;
 
 	HIGH_MEMORY = end_mem;
+	// 将所有内存页面使用计数均设为 USED (100，被使用)
 	for (i=0 ; i<PAGING_PAGES ; i++)
 		mem_map[i] = USED;
-	i = MAP_NR(start_mem);
+	i = MAP_NR(start_mem); 	// start_mem 为 6 MB (虚拟盘之后)
 	end_mem -= start_mem;
-	end_mem >>= 12;
+	end_mem >>= 12;					// 16 MB 的页数
+	// 将主内存中所有的页面计数全部清零
+	// 系统以后只把使用计数为 0 的页面视为空闲页面
 	while (end_mem-->0)
 		mem_map[i++]=0;
 }

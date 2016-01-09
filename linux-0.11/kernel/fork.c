@@ -36,33 +36,47 @@ void verify_area(void * addr,int size)
 	}
 }
 // 设置子进程的代码段、数据段，并且创建、复制子进程的第一个页表
+// 复制内存页表
+// nr 是新任务号
+// p 是新任务的数据结构指针
+// 该函数为新任务在线性地址空间中设置代码段和数据段基址、限长，并复制页表
+// 由于 Linux 采用写时复制(copy on write)技术，
+// 所以这里仅为新进程设置自己的目录表项和页表项，而没有实际为新进程分配物理内存页面。
+// 此时新进程于其父进程共享所有内存页面
+// 操作成功返回 0，否则返回出错号 ENOMEN(12)
 int copy_mem(int nr,struct task_struct * p)
 {
 	unsigned long old_data_base,new_data_base,data_limit;
 	unsigned long old_code_base,new_code_base,code_limit;
 
-	// 取子进程的代码、数据段限长
-	// 0x0f 即 0 1111：代码段、LDT、3 特权级
+	// 取子进程的代码段限长和数据段限长（字节数）
+	// 0x0f 代码段选择符，即 0 1111：代码段、LDT、3 特权级
 	code_limit=get_limit(0x0f);
-	// 0x17 即 1 0111：数据段、LDT、3 特权级
+	// 0x17 数据段选择符，即 1 0111：数据段、LDT、3 特权级
 	data_limit=get_limit(0x17);
-	// 获取父进程（ 进程0 ）的代码段、数据段基址
+	// 获取父进程（ 进程0 ）的代码段和数据段在线性空间中得基地址
 	old_code_base = get_base(current->ldt[1]);
 	old_data_base = get_base(current->ldt[2]);
+	// Linux-0.11 内核还不支持代码和数据段分立，检查代码段和数据段基址是否相同，
+	// 否则内核显示出错信息，并停止运行
 	if (old_data_base != old_code_base)
 		panic("We don't support separate I&D");
 	if (data_limit < code_limit)
 		panic("Bad data_limit");
 	// 现在 nr 是 1，0x4000000 是 64 MB
+	// 设置创建中的新进程在线性地址空间中得基地址等于（64 MB × nr(任务号) ）
+	// 并用该值设置新进程局部描述符中段描述符的基地址
 	new_data_base = new_code_base = nr * 0x4000000;
 	p->start_code = new_code_base;
 	// 设置子进程代码段基址
 	set_base(p->ldt[1],new_code_base);
-	// 设置子进程数据段基址
+	// 设置子进程数据段基址 
 	set_base(p->ldt[2],new_data_base);
+	// 正常情况下 copy_page_tables() 返回 0，否则表示出错，则释放刚申请的页表项
+	// 为进程 1 创建第一个页表，复制进程 0 的页表，设置进程 1 的页目录项
 	if (copy_page_tables(old_data_base,new_data_base,data_limit)) {
 		free_page_tables(new_data_base,data_limit);
-		return -ENOMEM;
+		return -ENOMEM; 		// ENOMEM = 12
 	}
 	return 0;
 }
