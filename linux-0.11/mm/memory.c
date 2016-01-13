@@ -28,34 +28,62 @@
 #include <linux/head.h>
 #include <linux/kernel.h>
 
+// volatile 告诉编译器 gcc 该函数不会返回，这样可以让 gcc 产生更好一些的代码
+// 使用 volatile 关键字，可以避免产生某些（未初始化变量）假警告信息
 volatile void do_exit(long code);
 
+// 显示内存已用完警告信息，并退出
 static inline volatile void oom(void)
 {
 	printk("out of memory\n\r");
+	// SIGSEGV = 11，表示“资源暂时不可用”
 	do_exit(SIGSEGV);
 }
 
+// 刷新页变换高速缓存
+// 为提高地址变换效率，CPU 将最近使用的页表数据放在芯片的高速缓存中
+// 修改页表信息后，需刷新该缓存
+// 重新加载页目录基址寄存器 cr3，刷新页变换高速缓存
+// eax = 0 是页目录的基址
 #define invalidate() \
 __asm__("movl %%eax,%%cr3"::"a" (0)) 			// 重置 CR3 为 0
 
 /* these are not to be changed without changing head.s etc */
-#define LOW_MEM 0x100000 									// 1 MB
-#define PAGING_MEMORY (15*1024*1024) 			// 15 MB 
-#define PAGING_PAGES (PAGING_MEMORY>>12) 	// 乘以 4 KB = 15 MB 的页数
-#define MAP_NR(addr) (((addr)-LOW_MEM)>>12)
-#define USED 100
+// linux 0.11 内核默认支持的最大内存容量为 16 MB，可以修改这里的定义以适合更大内存
+#define LOW_MEM 0x100000 										// 内核内存 1 MB
+#define PAGING_MEMORY (15*1024*1024) 				// 分页内存 15 MB，主内存区最多 15 MB
+#define PAGING_PAGES (PAGING_MEMORY>>12) 		// 乘以 4 KB = 15 MB 的页数
+#define MAP_NR(addr) (((addr)-LOW_MEM)>>12)	// 指定地址映射为页号
+#define USED 100														// 页面被占用标志
+
+// 用于判断给定线性地址是否位于当前进程的代码段中，4095 = 0xfff
+// ((addr) + 4095) & ~4095） 用于取得线性地址 addr 所在页面的末端地址
+
+// addr+4095的作用是将位于 0~4095 产生一个进位。
+// 例如, 2 + 4095 = 4097 = 0x1001 最左边的1就是产生的进位，
+// 接着 (addr+4095) & ~4095 的作用就是把刚得到的结果的低 12 位置 0 。
+// 这样一来 0x1001 就变成了 0x1000 这个就是 addr 所在页最后的地址 +1，
+// 即是当前页面的下一个页面的开始地址。
+// 假设一个代码段占据了 4 个页面大小的内存 addr 在这四个页面的话，
+// (addr+4095）& ~4095 得到的将是 addr 所在页面的下一个页面的起始地址。
+// 如果该结果小于 current->start_code + current->end_code 即代码段的结束地址，
+// 那么则该地址在代码段内，否则在代码段外面。
 
 #define CODE_SPACE(addr) ((((addr)+4095)&~4095) < \
 current->start_code + current->end_code)
 
+// 全局变量，存放实际物理内存的最高端地址
 static long HIGH_MEMORY = 0;
 
+// 从 from 处复制 1 页内存到 to 处
 #define copy_page(from,to) \
 __asm__("cld ; rep ; movsl"::"S" (from),"D" (to),"c" (1024):"cx","di","si")
 
 // 系统通过 mem_map[] 对 1 MB 以上的内存分页进行管理
 // 记录一个页面的使用次数
+// 物理内存映射字节 map，1 字节代表 1 页内存
+// 最多 15 MB 的内存空间
+// 在 mem_init() 中，不能做主存页面的位置都设置为 100（USED）
 static unsigned char mem_map [ PAGING_PAGES ] = {0,};
 
 /*
@@ -149,6 +177,14 @@ int free_page_tables(unsigned long from,unsigned long size)
  * 1 Mb-range, so the pages can be shared with the kernel. Thus the
  * special case for nr=xxxx.
  */
+ // 复制页目录表项和页表项
+ // 复制指定线性地址和长度内存对应的页目录项和页表项，从而被复制的页目录和页表项对应的
+ // 原物理内存页面被两套页表映射而共享使用。
+ // 复制时，需申请新页面来存放新页表，原物理内存区被共享。
+ // 此后，两个进程（父子进程）将共享内存区，直到有一个进程执行写操作时，内核才会为写操作进程
+ // 分配新的内存页（写时复制）。
+ // from, to: 线性地址
+ // size: 需复制的内存大小，单位 byte
 int copy_page_tables(unsigned long from,unsigned long to,long size)
 {
 	unsigned long * from_page_table;
@@ -157,35 +193,75 @@ int copy_page_tables(unsigned long from,unsigned long to,long size)
 	unsigned long * from_dir, * to_dir;
 	unsigned long nr;
 
+	// 有效性检测
+	// 0x3fffff = 4 MB，一个页表的管辖范围
+	// from 和 to 的后 22 位必须都是 0，也就是 4 MB 的整数倍
+	// 一个页表的 1024 项可以管理 4 MB内存
+	// 一个页表对应 4 MB 连续的线性地址空间必须是从 0x000000 开始的 4 MB 的整数倍
+  // 这样才能保证从一个页表的第一项开始复制，并且新页表最初的所有项都是有效的
 	if ((from&0x3fffff) || (to&0x3fffff))
 		panic("copy_page_tables called with wrong alignment");
+	// 一个页目录项的管理范围是 4 MB，一项是 4 Byte，项的地址就是项数×4，
+	// 也就是项管理的线性地址起始的 M 数
+	// 比如，0 项的地址是 0，管理范围是 0 ~ 4 MB
+	//      1 项的地址是 4，管理范围是 4 ~ 8 MB
+	//      2 项的地址是 8，管理范围是 8 ~ 12 MB
+	// 0xffc，(1111 1111 1100)，即 4 MB 以下部分清零的地址的 MB 数，也就是页目录项的地址
 	from_dir = (unsigned long *) ((from>>20) & 0xffc); /* _pg_dir = 0 */
 	to_dir = (unsigned long *) ((to>>20) & 0xffc);
-	size = ((unsigned) (size+0x3fffff)) >> 22;
+	// 根据 size 计算要复制的内存块占用的页表数（目录项数）
+	size = ((unsigned) (size+0x3fffff)) >> 22;				// 左移 22 位，即 4 MB 个数
+
+	// 对每个页目录项依次申请 1 页内存来保存对应的页表，并且开始页表复制操作
 	for( ; size-->0 ; from_dir++,to_dir++) {
+		// 如果目的目录指定的页表已存在（P = 1），则内核报错并退出
 		if (1 & *to_dir)
 			panic("copy_page_tables: already exist");
+		// 如果源目录项无效，即指定的页表不存在，则继续循环处理下一个页表项
 		if (!(1 & *from_dir))
 			continue;
+		// *from_dir 是目录项中得地址，0xfffff000 是将低 12 位清零，高 20 位是页表的地址
 		from_page_table = (unsigned long *) (0xfffff000 & *from_dir);
 		if (!(to_page_table = (unsigned long *) get_free_page()))
 			return -1;	/* Out of memory, see freeing */
+		// 设置目的目录项信息，7 即 111，表示用户级，可读写，存在（User, R/W, Present）
 		*to_dir = ((unsigned long) to_page_table) | 7;
+		// 如果在内核空间，则仅需复制头 160 页对应的页表项，对应于开始 640 KB 物理内存
+		// 0xA0，即 160，复制页表的项数
+	  // 否则，就复制一个也表中所有的 1024 个页表项，可映射 4 MB 物理内存
 		nr = (from==0)?0xA0:1024;
 		for ( ; nr-- > 0 ; from_page_table++,to_page_table++) {
+			// 复制父进程页表
 			this_page = *from_page_table;
+			// 若源页表未使用，则无需复制，继续处理下一项
 			if (!(1 & this_page))
 				continue;
+			// 设置页表项属性，~2 是 101，代表用户、只读、存在
+			// 让页表对应内存页面只读，然后将页表项复制到目录页表中
 			this_page &= ~2;
 			*to_page_table = this_page;
+
+			// 如果该页表所指物理页面的地址在 1 MB 以上，则需要设置内存页面映射数组 mem_map[]
+			// 计算页面号，以它为索引，在页面映射数组相应项中增加引用次数
+			// 1 MB 以内的内核区不参与用户分页管理
+			// mem_map[] 仅用于管理主内存区中的页面使用情况，
+			// 对于内核移动到进程 0 中并且调用进程 1 时（运行init()），复制页面处于内核代码区，
+			// 以下判断中的语句不会执行，进程 0 的页面可以随时读写
+			// 只有当调用 fork() 的父进程代码处于主内存区之外（大于 1 MB）时才会执行，
+			// 这种情况需要在进程调用 execve()，并装载执行了新程序代码才会出现
 			if (this_page > LOW_MEM) {
+				// 使源页表项所指内存页也为只读，因为现在有两个进程共用内存区了
+				// 若其中一个进程需要进行写操作，则可以通过页异常写保护处理，为执行写操作的进程
+				// 匹配 1 页新空闲页面，即写时复制（copy on write）
 				*from_page_table = this_page;
 				this_page -= LOW_MEM;
 				this_page >>= 12;
+				// 增加引用计数
 				mem_map[this_page]++;
 			}
 		}
 	}
+	// 重置 CR3 为 0，刷新“页变换高速缓存”
 	invalidate();
 	return 0;
 }
